@@ -9,7 +9,7 @@ from PySide6.QtGui import QPainter, QColor, QPen
 
 
 # ==============================
-# CLASE CANVAS DE DIBUJO (corregida)
+# CLASE CANVAS DE DIBUJO
 # ==============================
 class AutomataCanvas(QFrame):
     def __init__(self, rows, cols, cell_size=15, model="life"):
@@ -18,18 +18,16 @@ class AutomataCanvas(QFrame):
         self.cols = cols
         self.cell_size = cell_size
         self.grid = np.zeros((rows, cols), dtype=int)
-        self.model = model  # "life" o "fire"
+        self.model = model
         self.setFixedSize(cols * cell_size, rows * cell_size)
         self.setStyleSheet("background-color: white; border: 1px solid #444;")
         self.setMouseTracking(True)
 
     def set_model(self, model_name: str):
-        """Actualizar el modo de renderizado (life | fire)."""
         self.model = model_name
         self.update()
 
     def set_grid_shape(self, rows, cols):
-        """Redimensiona el grid (mantiene datos que quepan)."""
         new = np.zeros((rows, cols), dtype=int)
         hh = min(rows, self.rows)
         ww = min(cols, self.cols)
@@ -42,42 +40,29 @@ class AutomataCanvas(QFrame):
     def paintEvent(self, event):
         painter = QPainter(self)
         cs = self.cell_size
-
-        # fondo blanco (ya lo marca el stylesheet) — redundante pero seguro
         painter.fillRect(self.rect(), QColor(255, 255, 255))
 
         for i in range(self.rows):
             for j in range(self.cols):
                 val = int(self.grid[i, j])
 
-                # Mapeo de colores según modelo
                 if self.model == "life":
-                    # life: 1 -> negro, 0 -> blanco
-                    if val == 1:
-                        color = QColor(0, 0, 0)
-                    else:
-                        color = QColor(255, 255, 255)
-                else:  # fire model: 0 empty (negro), 1 tree (verde), 2 fire (naranja/rojo)
+                    color = QColor(0, 0, 0) if val == 1 else QColor(255, 255, 255)
+                else:
                     if val == 0:
-                        color = QColor(255, 255, 255)            # vacío -> negro
+                        color = QColor(255, 255, 255)
                     elif val == 1:
-                        color = QColor(34, 139, 34)        # árbol -> verde bosque
+                        color = QColor(34, 139, 34)
                     elif val == 2:
-                        color = QColor(255, 69, 0)         # fuego -> rojo/naranja
+                        color = QColor(255, 69, 0)
                     else:
-                        color = QColor(0, 0, 0)            # fallback
+                        color = QColor(0, 0, 0)
 
-                painter.fillRect(
-                    j * cs, i * cs,
-                    cs, cs, color
-                )
-
-                # rejilla fina gris
+                painter.fillRect(j * cs, i * cs, cs, cs, color)
                 painter.setPen(QPen(QColor(220, 220, 220)))
                 painter.drawRect(j * cs, i * cs, cs, cs)
 
     def _pos_to_cell(self, ev):
-        # ev can be QMouseEvent; support both .position() (float) and .pos()
         try:
             pos = ev.position()
             x = pos.x(); y = pos.y()
@@ -92,29 +77,24 @@ class AutomataCanvas(QFrame):
         row, col = self._pos_to_cell(event)
         if 0 <= row < self.rows and 0 <= col < self.cols:
             if self.model == "life":
-                # toggle 0 <-> 1
                 self.grid[row, col] = 1 - int(self.grid[row, col])
             else:
-                # cycle 0 -> 1 -> 2 -> 0
                 self.grid[row, col] = (int(self.grid[row, col]) + 1) % 3
             self.update()
 
     def mouseMoveEvent(self, event):
-        # si el usuario arrastra con botón izquierdo, actuamos igual que click
         if event.buttons() & Qt.LeftButton:
             row, col = self._pos_to_cell(event)
             if 0 <= row < self.rows and 0 <= col < self.cols:
                 if self.model == "life":
                     self.grid[row, col] = 1
                 else:
-                    # al arrastrar, ponemos árboles (1) para facilitar dibujar bosques; 
-                    # si quieres cambiar a ciclo, coméntalo y usa lo mismo que en click.
                     self.grid[row, col] = 1
                 self.update()
 
 
 # ==============================
-# CLASE PRINCIPAL (corregida)
+# CLASE PRINCIPAL
 # ==============================
 class CellularAutomaton(QWidget):
     def __init__(self):
@@ -128,7 +108,6 @@ class CellularAutomaton(QWidget):
 
         self.canvas = AutomataCanvas(self.rows, self.cols, self.cell_size, model=self.model)
 
-        # Temporizador para animación
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_grid)
 
@@ -136,8 +115,6 @@ class CellularAutomaton(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-
-        # Barra superior
         top_bar = QHBoxLayout()
 
         # Modelo
@@ -161,6 +138,13 @@ class CellularAutomaton(QWidget):
         self.height_spin.setValue(self.rows)
         self.height_spin.valueChanged.connect(self.resize_grid)
         top_bar.addWidget(self.height_spin)
+
+        # 🔹 Patrón predeterminado
+        top_bar.addWidget(QLabel("Patrón:"))
+        self.pattern_box = QComboBox()
+        self.pattern_box.addItems(["Ninguno", "Glider", "Blinker", "Toad", "Beacon", "Pulsar"])
+        self.pattern_box.currentTextChanged.connect(self.insert_pattern)
+        top_bar.addWidget(self.pattern_box)
 
         # Botones
         self.play_btn = QPushButton("▶ Play")
@@ -192,7 +176,7 @@ class CellularAutomaton(QWidget):
         layout.addLayout(top_bar)
         layout.addWidget(self.canvas, alignment=Qt.AlignCenter)
 
-        # Parámetros para modelo FIRE
+        # Parámetros FIRE
         fire_layout = QGridLayout()
         fire_layout.addWidget(QLabel("Parámetros Fire"), 0, 0, 1, 2)
 
@@ -215,9 +199,7 @@ class CellularAutomaton(QWidget):
         self.status_label = QLabel("Tick: 0 | Vivos: 0 | Densidad: 0.000")
         layout.addWidget(self.status_label)
 
-        # Inicializar estado UI (stop deshabilita botón stop inicialmente)
         self.stop_btn.setEnabled(False)
-        # Asegurarnos que timer tenga intervalo del slider
         init_tps = max(1, self.speed_slider.value())
         self.timer.setInterval(int(1000 / init_tps))
 
@@ -226,26 +208,21 @@ class CellularAutomaton(QWidget):
     # ==============================
     def change_model(self, model):
         self.model = model
-        # comunicar modelo al canvas para que pinte según corresponda
         self.canvas.set_model(model)
         self.clear()
 
     def change_speed(self, value):
-        # evitar división por 0
         tps = max(1, int(value))
         self.timer.setInterval(int(1000 / tps))
 
     def resize_grid(self):
         self.rows = self.height_spin.value()
         self.cols = self.width_spin.value()
-        # En lugar de crear un nuevo canvas que podría romper referencias,
-        # usamos set_grid_shape para mantener el widget y actualizar tamaño
         self.canvas.set_grid_shape(self.rows, self.cols)
         self.tick = 0
 
     def start(self):
         if not self.timer.isActive():
-            # usar el valor actual del slider como ticks por segundo
             tps = max(1, self.speed_slider.value())
             self.timer.setInterval(int(1000 / tps))
             self.timer.start()
@@ -264,8 +241,6 @@ class CellularAutomaton(QWidget):
         if self.model == "life":
             self.canvas.grid = np.random.choice([0, 1], (self.rows, self.cols))
         elif self.model == "fire":
-            # p: [empty, tree, fire]
-            # ejemplo: 70% vacío, 25% árbol, 5% fuego — puedes ajustar
             self.canvas.grid = np.random.choice([0, 1, 2], (self.rows, self.cols), p=[0.7, 0.25, 0.05])
         self.canvas.update()
         self.tick = 0
@@ -290,7 +265,61 @@ class CellularAutomaton(QWidget):
         self.status_label.setText(f"Tick: {self.tick} | Vivos: {alive} | Densidad: {density:.3f}")
 
     # ==============================
-    # MODELO CONWAY (Life)
+    # PATRONES PREDETERMINADOS
+    # ==============================
+    def insert_pattern(self, name):
+        if self.model != "life":
+            return  # solo aplica a Conway
+        self.clear()
+        g = self.canvas.grid
+        mid_r, mid_c = self.rows // 2, self.cols // 2
+
+        patterns = {
+            "Glider": np.array([
+                [0, 1, 0],
+                [0, 0, 1],
+                [1, 1, 1]
+            ]),
+            "Blinker": np.array([
+                [1, 1, 1]
+            ]),
+            "Toad": np.array([
+                [0, 1, 1, 1],
+                [1, 1, 1, 0]
+            ]),
+            "Beacon": np.array([
+                [1, 1, 0, 0],
+                [1, 1, 0, 0],
+                [0, 0, 1, 1],
+                [0, 0, 1, 1]
+            ]),
+            "Pulsar": np.array([
+                [0,0,1,1,1,0,0,0,1,1,1,0,0],
+                [0,0,0,0,0,0,0,0,0,0,0,0,0],
+                [1,0,0,0,0,1,0,1,0,0,0,0,1],
+                [1,0,0,0,0,1,0,1,0,0,0,0,1],
+                [1,0,0,0,0,1,0,1,0,0,0,0,1],
+                [0,0,1,1,1,0,0,0,1,1,1,0,0],
+                [0,0,0,0,0,0,0,0,0,0,0,0,0],
+                [0,0,1,1,1,0,0,0,1,1,1,0,0],
+                [1,0,0,0,0,1,0,1,0,0,0,0,1],
+                [1,0,0,0,0,1,0,1,0,0,0,0,1],
+                [1,0,0,0,0,1,0,1,0,0,0,0,1],
+                [0,0,0,0,0,0,0,0,0,0,0,0,0],
+                [0,0,1,1,1,0,0,0,1,1,1,0,0]
+            ])
+        }
+
+        if name != "Ninguno" and name in patterns:
+            p = patterns[name]
+            pr, pc = p.shape
+            start_r = mid_r - pr // 2
+            start_c = mid_c - pc // 2
+            g[start_r:start_r+pr, start_c:start_c+pc] = p
+            self.canvas.update()
+
+    # ==============================
+    # MODELOS
     # ==============================
     def update_life(self, grid):
         new_grid = grid.copy()
@@ -304,29 +333,21 @@ class CellularAutomaton(QWidget):
                     new_grid[i, j] = 1
         return new_grid
 
-    # ==============================
-    # MODELO FIRE
-    # ==============================
     def update_fire(self, grid):
         p_growth = float(self.p_growth.value())
         p_lightning = float(self.p_lightning.value())
         new_grid = grid.copy()
-
-        # Compact neighbor check with toroidal roll (optional); we keep simple local window
         for i in range(self.rows):
             for j in range(self.cols):
-                if grid[i, j] == 2:  # en fuego -> se convierte en vacío
+                if grid[i, j] == 2:
                     new_grid[i, j] = 0
                 elif grid[i, j] == 1:
-                    # vecinos 3x3
                     neighbors = grid[max(0, i - 1):min(self.rows, i + 2),
                                      max(0, j - 1):min(self.cols, j + 2)]
-                    # si algún vecino es fuego o cae rayo -> prende
                     if np.any(neighbors == 2) or np.random.random() < p_lightning:
                         new_grid[i, j] = 2
                 elif grid[i, j] == 0 and np.random.random() < p_growth:
                     new_grid[i, j] = 1
-
         return new_grid
 
 
